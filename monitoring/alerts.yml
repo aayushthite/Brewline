@@ -1,0 +1,45 @@
+groups:
+  - name: brewline
+    rules:
+      - alert: WorkerDown
+        expr: absent(up{job="worker"} == 1)
+        for: 15s
+        labels: { severity: critical }
+        annotations:
+          summary: "No barista workers are running"
+          description: "Orders will pile up in the queue until a worker comes back."
+
+      - alert: OrderBacklog
+        expr: max(brewline_queue_depth) > 15
+        for: 30s
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 15 orders are waiting"
+          description: "Queue depth is {{ $value }}. Add workers or fix the slow machine."
+
+      - alert: SlowBrewing
+        expr: histogram_quantile(0.95, sum by (le) (rate(brewline_brew_duration_seconds_bucket[1m]))) > 10
+        for: 30s
+        labels: { severity: warning }
+        annotations:
+          summary: "p95 brew time is above 10 seconds"
+          description: "Currently {{ $value | humanizeDuration }}. Is the machine slowed down?"
+
+      - alert: HighFailureRate
+        expr: |
+          sum(rate(brewline_orders_processed_total{outcome="failed"}[1m]))
+            / sum(rate(brewline_orders_processed_total[1m])) > 0.2
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "More than 20% of drinks are failing"
+          description: "Failure ratio is {{ $value | humanizePercentage }}."
+
+      - alert: ApiErrors
+        expr: |
+          sum(rate(brewline_http_request_duration_seconds_count{status=~"5.."}[1m]))
+            / sum(rate(brewline_http_request_duration_seconds_count[1m])) > 0.05
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "More than 5% of API requests return 5xx"

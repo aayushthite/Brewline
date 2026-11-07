@@ -1,0 +1,102 @@
+name: brewline
+
+services:
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [shop]
+
+  # Translates Redis internals into Prometheus metrics (the "exporter" pattern).
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [shop]
+
+  api:
+    build: ./api
+    image: brewline/api:latest
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      GRAFANA_URL: http://localhost:${GRAFANA_PORT:-3000}
+      PROMETHEUS_URL: http://localhost:${PROMETHEUS_PORT:-9090}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [shop]
+
+  worker:
+    build: ./worker
+    image: brewline/worker:latest
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    deploy:
+      replicas: 2        # two baristas; try `docker compose up -d --scale worker=4`
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [shop]
+
+  loadgen:
+    build: ./loadgen
+    image: brewline/loadgen:latest
+    environment:
+      API_URL: http://api:8000
+      ORDERS_PER_MIN: ${ORDERS_PER_MIN:-20}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [shop]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=2d
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    networks: [shop]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/brewline.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on: [prometheus]
+    networks: [shop]
+
+networks:
+  shop:
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:

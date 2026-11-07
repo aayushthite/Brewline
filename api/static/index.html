@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brewline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Brew<span>line</span></h1>
+    <p>Orders in, steam out. Every cup here is a metric.</p>
+  </header>
+
+  <main>
+    <section class="menu" aria-labelledby="menu-h">
+      <h2 id="menu-h">Today's menu</h2>
+      <label class="name">Name on the cup
+        <input id="customer" maxlength="20" placeholder="your name" autocomplete="off">
+      </label>
+      <div id="menu-grid" class="grid"></div>
+      <p id="note" class="note" role="status"></p>
+    </section>
+
+    <section class="rail" aria-labelledby="rail-h">
+      <h2 id="rail-h">Order rail</h2>
+      <ol id="tickets" class="tickets"></ol>
+      <p id="rail-empty" class="note">No tickets yet. Order something.</p>
+    </section>
+  </main>
+
+  <section class="backstage" aria-labelledby="bs-h">
+    <h2 id="bs-h">Backstage</h2>
+    <p class="note">The shop is simulated: customers keep ordering by themselves. Break the machine and watch the dashboards react.</p>
+    <div class="controls">
+      <button id="break" class="btn danger">Break the machine</button>
+      <button id="repair" class="btn">Repair it</button>
+      <span id="machine" class="chip">machine: checking</span>
+      <a id="grafana" class="link" target="_blank" rel="noopener" hidden>Open Grafana</a>
+      <a id="prom" class="link" target="_blank" rel="noopener" hidden>Open Prometheus</a>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

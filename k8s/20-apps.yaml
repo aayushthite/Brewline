@@ -1,0 +1,104 @@
+# Images are built locally (see README) and loaded into minikube / kind,
+# so imagePullPolicy is IfNotPresent. On EKS, push to ECR and change the image names.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: brewline
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: api }
+  template:
+    metadata:
+      labels: { app: api }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: api
+          image: brewline/api:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8000 }]
+          env:
+            - { name: REDIS_URL, value: "redis://redis:6379/0" }
+            # Fill in after the cluster is up if you want the UI links:
+            #   minikube service grafana -n brewline --url
+            - { name: GRAFANA_URL, value: "" }
+            - { name: PROMETHEUS_URL, value: "" }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 300m, memory: 192Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: brewline
+spec:
+  type: NodePort
+  selector: { app: api }
+  ports:
+    - port: 8000
+      targetPort: 8000
+      nodePort: 30800
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: brewline
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: worker }
+  template:
+    metadata:
+      labels: { app: worker }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+    spec:
+      terminationGracePeriodSeconds: 30   # lets a barista finish the current drink on SIGTERM
+      containers:
+        - name: worker
+          image: brewline/worker:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8001 }]
+          env:
+            - { name: REDIS_URL, value: "redis://redis:6379/0" }
+          resources:
+            requests: { cpu: 25m, memory: 48Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+  namespace: brewline
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: loadgen }
+  template:
+    metadata:
+      labels: { app: loadgen }
+    spec:
+      containers:
+        - name: loadgen
+          image: brewline/loadgen:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: API_URL, value: "http://api:8000" }
+            - { name: ORDERS_PER_MIN, value: "20" }
+          resources:
+            requests: { cpu: 10m, memory: 24Mi }
+            limits: { cpu: 100m, memory: 64Mi }

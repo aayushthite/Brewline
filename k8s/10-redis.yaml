@@ -1,0 +1,44 @@
+# Sidecar pattern: the exporter runs in the same pod as Redis and shares its network (localhost).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: brewline
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: redis }
+  template:
+    metadata:
+      labels: { app: redis }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9121"
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports: [{ containerPort: 6379 }]
+          readinessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 25m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+        - name: exporter
+          image: oliver006/redis_exporter:v1.62.0
+          env:
+            - { name: REDIS_ADDR, value: "redis://localhost:6379" }
+          ports: [{ containerPort: 9121 }]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: brewline
+spec:
+  selector: { app: redis }
+  ports: [{ port: 6379, targetPort: 6379 }]
